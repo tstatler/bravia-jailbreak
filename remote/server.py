@@ -59,6 +59,7 @@ SWEEPABLE_APPS = [
     "com.peacocktv.peacockandroid",
     "com.spotify.tv.android",
     "org.smarttube.stable",
+    "com.phlox.tvwebbrowser",
     "com.google.android.youtube.tv",
     "com.google.android.youtube.tvunplugged",
     "tv.pluto.android",
@@ -72,6 +73,7 @@ SWEEPABLE_APPS = [
 
 APP_FRIENDLY_NAMES = {
     "org.smarttube.stable": "SmartTube",
+    "com.phlox.tvwebbrowser": "TV Bro Browser",
     "com.netflix.ninja": "Netflix",
     "com.tubitv": "Tubi TV",
     "com.hulu.livingroomplus": "Hulu",

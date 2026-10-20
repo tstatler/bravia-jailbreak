@@ -379,12 +379,19 @@ for asset in data.get("assets", []):
     fi
     log_ok "Projectivy Launcher (com.spocky.projengmenu) verified installed!"
 
-    # Also install SmartTube (Ad-Free YouTube) if cached or available
+    # Also install SmartTube (Ad-Free YouTube) & TV Bro (Web Browser) if cached
     local st_apk
     st_apk="$(find "${CACHE_DIR}" -maxdepth 1 -name 'SmartTube*armeabi-v7a.apk' | sort -V | tail -n 1 || true)"
     if [[ -n "${st_apk}" && -f "${st_apk}" ]]; then
         log_info "Sideloading cached SmartTube APK ($(basename "${st_apk}"))..."
         adb_tv install -r "${st_apk}" || true
+    fi
+
+    local tvbro_apk
+    tvbro_apk="$(find "${CACHE_DIR}" -maxdepth 1 -name 'tvbro-*.apk' | sort -V | tail -n 1 || true)"
+    if [[ -n "${tvbro_apk}" && -f "${tvbro_apk}" ]]; then
+        log_info "Sideloading cached TV Bro Browser APK ($(basename "${tvbro_apk}"))..."
+        adb_tv install -r "${tvbro_apk}" || true
     fi
 
     log_info "Configuring Projectivy Launcher as default Home & enabling its Accessibility Home-hook..."
