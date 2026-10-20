@@ -612,7 +612,15 @@ cmd_restore() {
     log_ok "Full rollback complete!"
 }
 
-# 8. Full End-to-End Pipeline
+# 8. Launch Web Remote & Control Center Server
+cmd_remote() {
+    ensure_adb || true
+    local port="${1:-8765}"
+    log_step "Starting Sony Bravia Web Remote & Control Center on Port ${port}"
+    exec python3 "${SCRIPT_DIR}/remote/server.py" "${port}"
+}
+
+# 9. Full End-to-End Pipeline
 cmd_all() {
     cmd_discover
     cmd_backup
@@ -637,6 +645,7 @@ Commands:
   ${CYAN}install-launcher${NC}          Sideload Projectivy Launcher & disable stock ad-heavy launcher
   ${CYAN}debloat [--dry-run]${NC}       Remove Sony bloat, Samba TV spyware, telemetry & Katniss voice
   ${CYAN}tune${NC}                      Apply animation, D-pad latency, process cap & dex2oat AOT tweaks
+  ${CYAN}remote [port]${NC}             Launch the Local Web App & Mobile PWA Remote Control Center (default: 8765)
   ${CYAN}restore [dir|package]${NC}     Re-enable a specific package or roll back an entire backup
   ${CYAN}all${NC}                       Run full pipeline: discover -> backup -> audit -> launcher -> debloat -> tune
 
@@ -655,6 +664,7 @@ main() {
         install-launcher) cmd_install_launcher "$@" ;;
         debloat)          cmd_debloat "$@" ;;
         tune)             cmd_tune "$@" ;;
+        remote)           cmd_remote "$@" ;;
         restore)          cmd_restore "$@" ;;
         all)              cmd_all "$@" ;;
         help|--help|-h)   usage ;;

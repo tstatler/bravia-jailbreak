@@ -1,0 +1,10 @@
+{
+  "name": "Bravia Control Center",
+  "short_name": "Bravia Remote",
+  "description": "Sony Bravia Web Remote, App Launcher & RAM Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "orientation": "portrait"
+}

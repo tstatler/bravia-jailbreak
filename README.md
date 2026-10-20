@@ -59,6 +59,7 @@ Many Sony Bravia Android/Google TV models ship with only **2 GB of RAM**, a 32-b
 ./bravia-opt.sh install-launcher          # Sideload Projectivy Launcher & disable stock launchers
 ./bravia-opt.sh debloat [--dry-run]       # Strip Sony bloat, Samba TV, SetupWraith, Katniss, etc.
 ./bravia-opt.sh tune                      # Apply D-pad latency, animation, process cap & AOT compilation
+./bravia-opt.sh remote [port]             # Launch Web Remote & Control Center (Mac + Mobile PWA on port 8765)
 ./bravia-opt.sh restore [dir|package]     # Restore a single package or roll back an entire backup
 ```
 

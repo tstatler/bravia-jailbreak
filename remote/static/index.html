@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0b0f19" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Bravia Control Center</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #131a2a;
+      --card-border: #1f2a44;
+      --btn: #1c263b;
+      --btn-hover: #273552;
+      --btn-active: #3b82f6;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.28);
+      --danger: #ef4444;
+      --success: #10b981;
+      --warn: #f59e0b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    @media (max-width: 820px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .header-bar {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+    }
+
+    .tv-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+    .status-dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 10px var(--danger);
+    }
+
+    .tv-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .tv-sub {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .now-playing {
+      flex: 1;
+      min-width: 240px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .np-app {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .np-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 440px;
+    }
+
+    .np-time {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    h2 {
+      margin: 0 0 12px 0;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--card-border);
+      background: var(--btn);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.08s, border-color 0.12s;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    button:hover {
+      background: var(--btn-hover);
+    }
+
+    button:active,
+    button.flash {
+      background: var(--btn-active);
+      border-color: var(--accent);
+      transform: scale(0.96);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.28);
+    }
+
+    .btn-accent {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.45);
+      color: #93c5fd;
+    }
+
+    /* Remote Column */
+    .remote-top-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .dpad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 64px);
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .dpad-btn {
+      font-size: 1.25rem;
+      border-radius: 16px;
+    }
+
+    .dpad-ok {
+      background: var(--accent);
+      border-color: #60a5fa;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      border-radius: 50%;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .nav-row,
+    .vol-row,
+    .media-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .kbd-hint {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-weight: 400;
+      margin-top: 2px;
+    }
+
+    /* Right Column Sections */
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .text-bar {
+      display: flex;
+      gap: 8px;
+    }
+
+    .text-bar input {
+      flex: 1;
+      background: #0d1320;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.92rem;
+      outline: none;
+    }
+
+    .text-bar input:focus {
+      border-color: var(--accent);
+    }
+
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      gap: 10px;
+    }
+
+    .app-tile {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--btn);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .app-launch-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      justify-content: flex-start;
+      padding: 12px 10px 12px 12px;
+      font-size: 0.85rem;
+      text-align: left;
+      border-radius: 0;
+    }
+
+    .app-kill-btn {
+      border: none;
+      border-left: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--muted);
+      padding: 12px 10px;
+      border-radius: 0;
+      font-size: 0.8rem;
+      title: "Force stop app";
+    }
+    .app-kill-btn:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: #fca5a5;
+    }
+
+    .hdmi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    /* RAM & Process Table */
+    .ram-meters {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 560px) {
+      .ram-meters {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .meter-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+
+    .meter-bar {
+      height: 8px;
+      background: #1e293b;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    .proc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .proc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+    }
+
+    .proc-name {
+      font-weight: 600;
+    }
+
+    .proc-pkg {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      margin-left: 6px;
+    }
+
+    .proc-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .proc-rss {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    .proc-kill {
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      border-radius: 6px;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      background: #1e293b;
+      border: 1px solid var(--accent);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    }
+    #toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Top Status & Now Playing Banner -->
+    <div class="card header-bar">
+      <div class="tv-badge">
+        <div id="statusDot" class="status-dot"></div>
+        <div>
+          <div id="tvName" class="tv-title">BRAVIA VU1</div>
+          <div id="tvTarget" class="tv-sub">Connecting...</div>
+        </div>
+      </div>
+
+      <div class="now-playing">
+        <div style="min-width: 0;">
+          <div id="npApp" class="np-app">IDLE</div>
+          <div id="npTitle" class="np-title">Nothing currently playing</div>
+        </div>
+        <div id="npTime" class="np-time">00:00</div>
+      </div>
+    </div>
+
+    <!-- Left Column: Remote Control -->
+    <div class="card">
+      <h2>
+        <span>Remote Control</span>
+        <span style="font-size: 0.7rem; text-transform: none;">Mac Keyboard Active</span>
+      </h2>
+
+      <div class="remote-top-row">
+        <button class="btn-danger" data-key="SLEEP" onclick="sendKey('SLEEP')">
+          <div>Power Off<span class="kbd-hint">Standby</span></div>
+        </button>
+        <button class="btn-accent" data-key="WAKEUP" onclick="sendKey('WAKEUP')">
+          <div>Wake TV<span class="kbd-hint">WoL + ADB</span></div>
+        </button>
+        <button data-key="TV_INPUT" onclick="sendKey('TV_INPUT')">
+          <div>Input<span class="kbd-hint">Key: I</span></div>
+        </button>
+      </div>
+
+      <div class="dpad-grid">
+        <div></div>
+        <button class="dpad-btn" data-key="UP" onclick="sendKey('UP')">▲</button>
+        <div></div>
+
+        <button class="dpad-btn" data-key="LEFT" onclick="sendKey('LEFT')">◀</button>
+        <button class="dpad-ok" data-key="CENTER" onclick="sendKey('CENTER')">OK</button>
+        <button class="dpad-btn" data-key="RIGHT" onclick="sendKey('RIGHT')">▶</button>
+
+        <div></div>
+        <button class="dpad-btn" data-key="DOWN" onclick="sendKey('DOWN')">▼</button>
+        <div></div>
+      </div>
+
+      <div class="nav-row">
+        <button data-key="BACK" onclick="sendKey('BACK')">
+          <div>⟵ Back<span class="kbd-hint">Esc / Bksp</span></div>
+        </button>
+        <button class="btn-accent" data-key="HOME" onclick="sendKey('HOME')">
+          <div>⌂ Home<span class="kbd-hint">Key: H</span></div>
+        </button>
+        <button data-key="MENU" onclick="sendKey('MENU')">
+          <div>☰ Menu<span class="kbd-hint">Key: C</span></div>
+        </button>
+      </div>
+
+      <div class="vol-row">
+        <button data-key="VOL_DOWN" onclick="sendKey('VOL_DOWN')">
+          <div>🔉 Vol -<span class="kbd-hint">Key: -</span></div>
+        </button>
+        <button data-key="MUTE" onclick="sendKey('MUTE')">
+          <div>🔇 Mute<span class="kbd-hint">Key: M</span></div>
+        </button>
+        <button data-key="VOL_UP" onclick="sendKey('VOL_UP')">
+          <div>🔊 Vol +<span class="kbd-hint">Key: =</span></div>
+        </button>
+      </div>
+
+      <div class="media-row">
+        <button data-key="REWIND" onclick="sendKey('REWIND')">
+          <div>⏪ Rew<span class="kbd-hint">Key: [</span></div>
+        </button>
+        <button data-key="PLAY_PAUSE" onclick="sendKey('PLAY_PAUSE')">
+          <div>⏯ Play/Pause<span class="kbd-hint">Space</span></div>
+        </button>
+        <button data-key="FAST_FORWARD" onclick="sendKey('FAST_FORWARD')">
+          <div>⏩ Fwd<span class="kbd-hint">Key: ]</span></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Column: Type-to-TV, App Switcher, RAM Dashboard -->
+    <div class="right-col">
+      <!-- Type / Paste Text to TV -->
+      <div class="card">
+        <h2>Type or Paste Text to TV</h2>
+        <div class="text-bar">
+          <input
+            id="tvTextInput"
+            type="text"
+            placeholder="Type search query, password, or text..."
+            onkeydown="if(event.key==='Enter'){event.stopPropagation(); sendText(true);}"
+          />
+          <button onclick="sendText(false)">Send</button>
+          <button class="btn-accent" onclick="sendText(true)">Send + Enter</button>
+          <button onclick="sendKey('DEL')" title="Backspace on TV">⌫</button>
+        </div>
+      </div>
+
+      <!-- 1-Click App Launcher & Force-Killer -->
+      <div class="card">
+        <h2>
+          <span>1-Click App Launcher</span>
+          <span style="font-size: 0.7rem; text-transform: none;">Tap name to launch · Tap × to force-stop</span>
+        </h2>
+        <div class="apps-grid" id="appsGrid"></div>
+
+        <h2 style="margin-top: 16px;">Direct HDMI & Tuner Inputs</h2>
+        <div class="hdmi-row">
+          <button onclick="launchHdmi(1)">HDMI 1</button>
+          <button onclick="launchHdmi(2)">HDMI 2</button>
+          <button onclick="launchHdmi(3)">HDMI 3</button>
+          <button onclick="launchHdmi(4)">HDMI 4</button>
+        </div>
+      </div>
+
+      <!-- Live RAM & Process Monitor -->
+      <div class="card">
+        <h2>
+          <span>Live Memory (RAM) & Active Processes</span>
+          <button class="btn-accent" style="padding: 5px 10px; font-size: 0.75rem;" onclick="sweepRam()">
+            🧹 Sweep Background RAM
+          </button>
+        </h2>
+
+        <div class="ram-meters">
+          <div class="meter-box">
+            <div class="meter-label">
+              <span>Physical RAM</span>
+              <span id="ramText">-- / 2048 MB</span>
+            </div>
+            <div class="meter-bar">
+              <div id="ramFill" class="meter-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="meter-box">
+            <div class="meter-label">
+              <span>ZRAM Swap</span>
+              <span id="swapText">-- / 600 MB</span>
+            </div>
+            <div class="meter-bar">
+              <div id="swapFill" class="meter-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="proc-list" id="procList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    const APPS = [
+      { name: "SmartTube", pkg: "org.smarttube.stable" },
+      { name: "Netflix", pkg: "com.netflix.ninja" },
+      { name: "Tubi TV", pkg: "com.tubitv" },
+      { name: "Hulu", pkg: "com.hulu.livingroomplus" },
+      { name: "Max (HBO)", pkg: "com.hbo.hbonow" },
+      { name: "Prime Video", pkg: "com.amazon.amazonvideo.livingroom" },
+      { name: "Peacock", pkg: "com.peacocktv.peacockandroid" },
+      { name: "Spotify", pkg: "com.spotify.tv.android" },
+      { name: "Pluto TV", pkg: "tv.pluto.android" },
+      { name: "YouTube TV", pkg: "com.google.android.youtube.tvunplugged" },
+      { name: "Live OTA TV", pkg: "com.android.tv" },
+      { name: "TV Settings", pkg: "com.android.tv.settings" }
+    ];
+
+    function renderApps() {
+      const grid = document.getElementById("appsGrid");
+      grid.innerHTML = APPS.map(a => `
+        <div class="app-tile">
+          <button class="app-launch-btn" onclick="launchApp('${a.pkg}', '${a.name}')">${a.name}</button>
+          <button class="app-kill-btn" title="Force-stop ${a.name}" onclick="killApp('${a.pkg}', '${a.name}')">✕</button>
+        </div>
+      `).join("");
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+    }
+
+    function flashButton(key) {
+      const btn = document.querySelector(`button[data-key="${key}"]`);
+      if (btn) {
+        btn.classList.add("flash");
+        setTimeout(() => btn.classList.remove("flash"), 140);
+      }
+    }
+
+    async function apiPost(path, payload) {
+      try {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        return await res.json();
+      } catch (e) {
+        showToast("Network error talking to server");
+        return { ok: false };
+      }
+    }
+
+    async function sendKey(key) {
+      flashButton(key);
+      if (navigator.vibrate) navigator.vibrate(12);
+      await apiPost("/api/key", { key });
+    }
+
+    async function sendText(submit) {
+      const input = document.getElementById("tvTextInput");
+      const text = input.value;
+      if (!text) return;
+      showToast(`Sending text to TV...`);
+      const res = await apiPost("/api/text", { text, submit });
+      if (res.ok) {
+        input.value = "";
+        showToast("Sent to TV!");
+      }
+    }
+
+    async function launchApp(pkg, name) {
+      showToast(`Launching ${name}...`);
+      await apiPost("/api/app/launch", { package: pkg });
+      setTimeout(refreshStatus, 1200);
+    }
+
+    async function launchHdmi(num) {
+      showToast(`Switching to HDMI ${num}...`);
+      await apiPost("/api/app/launch", { hdmi: num });
+    }
+
+    async function killApp(pkg, name) {
+      showToast(`Killing ${name || pkg}...`);
+      await apiPost("/api/app/kill", { package: pkg });
+      setTimeout(refreshStatus, 600);
+    }
+
+    async function sweepRam() {
+      showToast("Sweeping background apps & caches...");
+      const res = await apiPost("/api/ram/free", {});
+      if (res.ok) {
+        showToast(`RAM Available: ${res.after_mb} MB (+${res.freed_mb} MB freed)`);
+        if (res.status) updateDashboard(res.status);
+      }
+    }
+
+    function updateDashboard(data) {
+      const dot = document.getElementById("statusDot");
+      document.getElementById("tvName").textContent = data.tv_name || "BRAVIA VU1";
+      document.getElementById("tvTarget").textContent = data.target || "";
+
+      if (!data.connected) {
+        dot.classList.add("offline");
+        document.getElementById("npApp").textContent = "STANDBY / OFFLINE";
+        document.getElementById("npTitle").textContent = data.error || "TV is asleep";
+        return;
+      }
+      dot.classList.remove("offline");
+
+      if (data.now_playing) {
+        const np = data.now_playing;
+        document.getElementById("npApp").textContent = `${np.app_name} · ${np.state}`;
+        document.getElementById("npTitle").textContent = np.title;
+        document.getElementById("npTime").textContent = np.position_str || "00:00";
+      }
+
+      if (data.ram) {
+        const r = data.ram;
+        document.getElementById("ramText").textContent = `${r.available_mb} MB free / ${r.total_mb} MB`;
+        document.getElementById("ramFill").style.width = `${r.used_pct}%`;
+        document.getElementById("swapText").textContent = `${r.swap_used_mb} / ${r.swap_total_mb} MB used`;
+        document.getElementById("swapFill").style.width = `${r.swap_pct}%`;
+      }
+
+      if (data.processes) {
+        const list = document.getElementById("procList");
+        list.innerHTML = data.processes.map(p => `
+          <div class="proc-row">
+            <div>
+              <span class="proc-name">${p.label}</span>
+              <span class="proc-pkg">${p.package}</span>
+            </div>
+            <div class="proc-right">
+              <span class="proc-rss">${p.rss_mb} MB</span>
+              ${p.killable ? `<button class="btn-danger proc-kill" onclick="killApp('${p.package}', '${p.label}')">Kill</button>` : ""}
+            </div>
+          </div>
+        `).join("");
+      }
+    }
+
+    async function refreshStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        updateDashboard(data);
+      } catch (e) {}
+    }
+
+    // Physical Mac Keyboard Navigation when not typing in the input box
+    window.addEventListener("keydown", (e) => {
+      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const map = {
+        ArrowUp: "UP",
+        ArrowDown: "DOWN",
+        ArrowLeft: "LEFT",
+        ArrowRight: "RIGHT",
+        Enter: "CENTER",
+        Backspace: "BACK",
+        Escape: "BACK",
+        " ": "PLAY_PAUSE",
+        h: "HOME",
+        H: "HOME",
+        m: "MUTE",
+        M: "MUTE",
+        c: "MENU",
+        C: "MENU",
+        i: "TV_INPUT",
+        I: "TV_INPUT",
+        "-": "VOL_DOWN",
+        "=": "VOL_UP",
+        "+": "VOL_UP",
+        "[": "REWIND",
+        "]": "FAST_FORWARD"
+      };
+
+      if (map[e.key]) {
+        e.preventDefault();
+        sendKey(map[e.key]);
+      }
+    });
+
+    renderApps();
+    refreshStatus();
+    setInterval(refreshStatus, 3000);
+  </script>
+</body>
+</html>
