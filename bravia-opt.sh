@@ -384,7 +384,7 @@ for asset in data.get("assets", []):
 
     # Disable Accessibility services to eliminate D-pad key-filter & focus-tree scrolling lag
     # (Not needed when stock launcher is disabled and Projectivy is set as native home activity)
-    adb_tv shell settings delete secure enabled_accessibility_services >/dev/null 2>&1 || true
+    adb_tv shell settings put secure enabled_accessibility_services null >/dev/null 2>&1 || true
     adb_tv shell settings put secure accessibility_enabled 0 || true
 
     log_info "Disabling heavy stock Google/Android TV launchers and recommendation engines..."
@@ -478,7 +478,7 @@ cmd_tune() {
     log_step "Applying System Performance, Scrolling & Input Latency Tweaks"
 
     log_info "Disabling Accessibility key-interceptor & focus-tree overhead for instant D-pad scrolling..."
-    adb_tv shell settings delete secure enabled_accessibility_services >/dev/null 2>&1 || true
+    adb_tv shell settings put secure enabled_accessibility_services null >/dev/null 2>&1 || true
     adb_tv shell settings put secure accessibility_enabled 0 || true
     disable_or_uninstall_pkg "com.google.android.marvin.talkback" "false"
 
