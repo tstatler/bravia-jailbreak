@@ -338,15 +338,18 @@ cmd_backup() {
     log_ok "Saved package and settings snapshot to ${bdir}"
 }
 
-# 4. Sideload & Activate Projectivy Launcher
+# 4. Sideload & Activate Projectivy Launcher (+ SmartTube) Safely
 cmd_install_launcher() {
     ensure_adb
-    log_step "Installing & Activating Projectivy Launcher (com.spocky.projengmenu)"
+    log_step "Installing & Activating Projectivy Launcher (com.spocky.projengmenu) & SmartTube"
     mkdir -p "${CACHE_DIR}"
 
-    log_info "Querying GitHub API (spocky/miproja1) for latest Projectivy Launcher APK..."
-    local apk_url
-    apk_url="$(curl -sL https://api.github.com/repos/spocky/miproja1/releases/latest | python3 -c '
+    local apk_file
+    apk_file="$(find "${CACHE_DIR}" -maxdepth 1 -name 'ProjectivyLauncher-*.apk' | sort -V | tail -n 1 || true)"
+    if [[ -z "${apk_file}" || ! -f "${apk_file}" ]]; then
+        log_info "Querying GitHub API (spocky/miproja1) for latest Projectivy Launcher APK..."
+        local apk_url
+        apk_url="$(curl -sL https://api.github.com/repos/spocky/miproja1/releases/latest | python3 -c '
 import sys, json
 data = json.load(sys.stdin)
 for asset in data.get("assets", []):
@@ -355,39 +358,48 @@ for asset in data.get("assets", []):
         print(url)
         break
 ')"
-
-    if [[ -z "${apk_url}" ]]; then
-        log_error "Failed to fetch Projectivy Launcher APK URL from GitHub."
-        return 1
-    fi
-
-    local apk_file="${CACHE_DIR}/$(basename "${apk_url}")"
-    if [[ ! -f "${apk_file}" ]]; then
+        if [[ -z "${apk_url}" ]]; then
+            log_error "Failed to fetch Projectivy Launcher APK URL from GitHub."
+            return 1
+        fi
+        apk_file="${CACHE_DIR}/$(basename "${apk_url}")"
         log_info "Downloading $(basename "${apk_url}")..."
         curl -L --fail --progress-bar -o "${apk_file}" "${apk_url}"
     else
-        log_info "Using cached APK: ${apk_file}"
+        log_info "Using cached Projectivy APK: ${apk_file}"
     fi
 
     log_info "Sideloading Projectivy Launcher onto ${TV_NAME}..."
     adb_tv install -r "${apk_file}"
 
-    # Verify installation before touching stock launcher
+    # Verify installation before configuring launcher
     if ! adb_tv shell pm list packages -e | tr -d '\r' | grep -qx "package:com.spocky.projengmenu"; then
-        log_error "Projectivy Launcher installation could not be verified! Aborting stock launcher removal."
+        log_error "Projectivy Launcher installation could not be verified! Aborting launcher switch."
         return 1
     fi
     log_ok "Projectivy Launcher (com.spocky.projengmenu) verified installed!"
 
-    log_info "Setting Projectivy Launcher as default Home activity..."
+    # Also install SmartTube (Ad-Free YouTube) if cached or available
+    local st_apk
+    st_apk="$(find "${CACHE_DIR}" -maxdepth 1 -name 'SmartTube*armeabi-v7a.apk' | sort -V | tail -n 1 || true)"
+    if [[ -n "${st_apk}" && -f "${st_apk}" ]]; then
+        log_info "Sideloading cached SmartTube APK ($(basename "${st_apk}"))..."
+        adb_tv install -r "${st_apk}" || true
+    fi
+
+    log_info "Configuring Projectivy Launcher as default Home & enabling its Accessibility Home-hook..."
     adb_tv shell cmd package set-home-activity "com.spocky.projengmenu/com.spocky.projengmenu.ui.home.MainActivity" || true
+    adb_tv shell settings put secure enabled_accessibility_services "com.spocky.projengmenu/com.spocky.projengmenu.services.ProjectivyAccessibilityService" || true
+    adb_tv shell settings put secure accessibility_enabled 1 || true
 
-    # Disable Accessibility services to eliminate D-pad key-filter & focus-tree scrolling lag
-    # (Not needed when stock launcher is disabled and Projectivy is set as native home activity)
-    adb_tv shell settings put secure enabled_accessibility_services null >/dev/null 2>&1 || true
-    adb_tv shell settings put secure accessibility_enabled 0 || true
+    # IMPORTANT COLD-BOOT SAFEGUARD:
+    # Keep com.google.android.tvlauncher installed as the system-signed Android 11 Direct Boot
+    # HOME fallback so the TV never hangs on bootanimation, while throttling its background CPU/RAM
+    # and disabling the heavy Google TV ad/recommendation banner service (tvrecommendations).
+    adb_tv shell cmd appops set com.google.android.tvlauncher RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+    adb_tv shell cmd appops set com.google.android.tvlauncher RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true
 
-    log_info "Disabling heavy stock Google/Android TV launchers and recommendation engines..."
+    log_info "Disabling stock Google/Sony ad & recommendation engines (keeping tvlauncher as DirectBoot fallback)..."
     local enabled_pkgs pkg
     enabled_pkgs="$(adb_tv shell pm list packages -e | sed 's/^package://;s/\r$//')"
     while IFS= read -r pkg; do
@@ -397,10 +409,10 @@ for asset in data.get("assets", []):
 
     # Launch Projectivy immediately so the user sees the new home screen
     adb_tv shell monkey -p com.spocky.projengmenu -c android.intent.category.HOME 1 >/dev/null 2>&1 || true
-    log_ok "Projectivy Launcher is now active and stock launchers are disabled!"
+    log_ok "Projectivy Launcher is active and cold-boot DirectBoot fallback is preserved!"
 }
 
-# Helper to disable/uninstall a single package for user 0 safely
+# Helper to disable/uninstall a single package for user 0 safely (with Cold-Boot Safeguards)
 disable_or_uninstall_pkg() {
     local pkg="$1"
     local dry_run="${2:-false}"
@@ -416,20 +428,56 @@ disable_or_uninstall_pkg() {
         return 0
     fi
 
+    # Inspect package metadata to enforce Cold-Boot Safeguards:
+    # 1. Never disable/uninstall shared UID 1000 (android.uid.system) packages
+    # 2. Never disable/uninstall FLAG_PERSISTENT system packages
+    # 3. Only use 'pm uninstall --user 0' on /data/app packages; use 'pm disable-user --user 0' on system packages
+    local pkg_dump
+    pkg_dump="$(adb_tv shell dumpsys package "${pkg}" 2>/dev/null | tr -d '\r' || true)"
+
+    if echo "${pkg_dump}" | grep -qE "userId=1000([^0-9]|$)|sharedUser=.*android\.uid\.system"; then
+        log_warn "[SAFEGUARD] Refusing to disable UID 1000 (android.uid.system) package: ${pkg}"
+        return 0
+    fi
+
+    if echo "${pkg_dump}" | grep -E "pkgFlags=\[" | grep -qw "PERSISTENT"; then
+        log_warn "[SAFEGUARD] Refusing to disable persistent system service package: ${pkg}"
+        return 0
+    fi
+
+    local is_data_app="false"
+    if echo "${pkg_dump}" | grep -qE "codePath=/data/app"; then
+        is_data_app="true"
+    fi
+
     if [[ "${dry_run}" == "true" ]]; then
-        echo -e "  ${YELLOW}[DRY-RUN]${NC} Would disable & uninstall (--user 0): ${pkg}"
+        if [[ "${is_data_app}" == "true" ]]; then
+            echo -e "  ${YELLOW}[DRY-RUN]${NC} Would uninstall removable /data/app bloatware (--user 0): ${pkg}"
+        else
+            echo -e "  ${YELLOW}[DRY-RUN]${NC} Would disable system bloatware (pm disable-user --user 0 ONLY): ${pkg}"
+        fi
         return 0
     fi
 
     adb_tv shell am force-stop "${pkg}" >/dev/null 2>&1 || true
-    local out_disable out_uninst
-    out_disable="$(adb_tv shell pm disable-user --user 0 "${pkg}" 2>&1 | tr -d '\r' || true)"
-    out_uninst="$(adb_tv shell pm uninstall -k --user 0 "${pkg}" 2>&1 | tr -d '\r' || true)"
+    adb_tv shell cmd appops set "${pkg}" RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+    adb_tv shell cmd appops set "${pkg}" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+
+    local out_action
+    if [[ "${is_data_app}" == "true" ]]; then
+        out_action="$(adb_tv shell pm uninstall --user 0 "${pkg}" 2>&1 | tr -d '\r' || true)"
+        if [[ "${out_action}" != *"Success"* ]]; then
+            out_action="$(adb_tv shell pm disable-user --user 0 "${pkg}" 2>&1 | tr -d '\r' || true)"
+        fi
+    else
+        # System package: ONLY use pm disable-user --user 0 (NEVER pm uninstall -k --user 0)
+        out_action="$(adb_tv shell pm disable-user --user 0 "${pkg}" 2>&1 | tr -d '\r' || true)"
+    fi
 
     if [[ -d "${BACKUP_ROOT}/latest" ]]; then
         echo "${pkg}" >> "${BACKUP_ROOT}/latest/removed_packages.log"
     fi
-    log_ok "Removed bloatware: ${BOLD}${pkg}${NC} (${out_uninst:-${out_disable}})"
+    log_ok "Disabled bloatware: ${BOLD}${pkg}${NC} (${out_action})"
 }
 
 # 5. Debloat Sony & Google/Telemetry Bloatware
@@ -477,10 +525,15 @@ cmd_tune() {
     ensure_adb
     log_step "Applying System Performance, Scrolling & Input Latency Tweaks"
 
-    log_info "Disabling Accessibility key-interceptor & focus-tree overhead for instant D-pad scrolling..."
-    adb_tv shell settings put secure enabled_accessibility_services null >/dev/null 2>&1 || true
-    adb_tv shell settings put secure accessibility_enabled 0 || true
+    local enabled_pkgs
+    enabled_pkgs="$(adb_tv shell pm list packages -e | sed 's/^package://;s/\r$//')"
+
+    log_info "Disabling TalkBack screen-reader overhead while preserving Projectivy Launcher Home hook..."
     disable_or_uninstall_pkg "com.google.android.marvin.talkback" "false"
+    if echo "${enabled_pkgs}" | grep -qx "com.spocky.projengmenu"; then
+        adb_tv shell settings put secure enabled_accessibility_services "com.spocky.projengmenu/com.spocky.projengmenu.services.ProjectivyAccessibilityService" || true
+        adb_tv shell settings put secure accessibility_enabled 1 || true
+    fi
 
     log_info "Setting window, transition, and animator duration scales to ${ANIMATION_SCALE}x..."
     adb_tv shell settings put global window_animation_scale "${ANIMATION_SCALE}"
@@ -494,10 +547,9 @@ cmd_tune() {
     adb_tv shell settings put global activity_manager_constants "max_cached_processes=${MAX_CACHED_PROCESSES}" || true
     adb_tv shell device_config put activity_manager max_cached_processes "${MAX_CACHED_PROCESSES}" >/dev/null 2>&1 || true
 
-    log_info "Restricting background execution (appops RUN_IN_BACKGROUND) on Play Store & streaming apps..."
-    local enabled_pkgs
-    enabled_pkgs="$(adb_tv shell pm list packages -e | sed 's/^package://;s/\r$//')"
+    log_info "Restricting background execution (appops RUN_IN_BACKGROUND) on stock fallback & streaming apps..."
     local bg_restrict_pkgs=(
+        "com.google.android.tvlauncher"
         "com.android.vending"
         "com.netflix.ninja"
         "com.hulu.livingroomplus"
@@ -542,20 +594,19 @@ cmd_tune() {
     log_info "Running Ahead-of-Time (AOT) native ARM compilation (dex2oat -m speed) on UI & streaming apps..."
     local aot_candidates=(
         "com.spocky.projengmenu"
+        "org.smarttube.stable"
         "com.android.systemui"
         "com.android.tv.settings"
         "com.android.tv"
         "com.sony.dtv.smartui"
         "com.netflix.ninja"
-        "com.google.android.youtube.tv"
-        "com.google.android.youtube.tvunplugged"
         "com.disney.disneyplus"
         "com.amazon.amazonvideo.livingroom"
         "com.apple.atve.sony.appletv"
         "com.hbo.hbonow"
         "com.hulu.livingroomplus"
         "com.peacocktv.peacockandroid"
-        "com.spotify.tv.android"
+        "com.tubitv"
     )
     local p
     for p in "${aot_candidates[@]}"; do
@@ -620,7 +671,44 @@ cmd_remote() {
     exec python3 "${SCRIPT_DIR}/remote/server.py" "${port}"
 }
 
-# 9. Full End-to-End Pipeline
+# 9. Verify Cold-Boot Safety Across an ADB Reboot
+cmd_verify_reboot() {
+    ensure_adb
+    log_step "Verifying Cold-Boot Safety on ${TV_NAME} (${ADB_TARGET})"
+    log_info "Issuing 'adb reboot' and monitoring cold-boot completion..."
+    adb_tv reboot || true
+
+    log_info "Waiting 15s for TV to shut down..."
+    sleep 15
+    adb disconnect "${ADB_TARGET}" >/dev/null 2>&1 || true
+
+    local elapsed=15
+    local max_wait=120
+    while [[ ${elapsed} -lt ${max_wait} ]]; do
+        sleep 5
+        elapsed=$((elapsed + 5))
+        local ip
+        ip="$(resolve_tv_ip)"
+        local target="${ip}:${ADB_PORT}"
+        adb connect "${target}" >/dev/null 2>&1 || true
+        if adb devices | grep -qE "^${target}[[:space:]]+device$"; then
+            export ADB_TARGET="${target}"
+            local boot_done
+            boot_done="$(adb_tv shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            if [[ "${boot_done}" == "1" ]]; then
+                log_ok "Cold boot completed cleanly in ~${elapsed}s (sys.boot_completed=1)!"
+                adb_tv shell monkey -p com.spocky.projengmenu -c android.intent.category.HOME 1 >/dev/null 2>&1 || true
+                return 0
+            fi
+        fi
+        log_info "  [${elapsed}s/${max_wait}s] Waiting for Android TV system_server & Wi-Fi..."
+    done
+
+    log_error "TV did not report sys.boot_completed=1 within ${max_wait}s."
+    return 1
+}
+
+# 10. Full End-to-End Pipeline
 cmd_all() {
     cmd_discover
     cmd_backup
@@ -642,9 +730,10 @@ Commands:
   ${CYAN}discover${NC}                  Resolve TV IP (mDNS -> ARP MAC -> Fallback) and connect ADB
   ${CYAN}audit${NC}                     Inspect free RAM, storage, settings, and active bloatware
   ${CYAN}backup${NC}                    Snapshot installed/enabled packages & settings to ./backups/
-  ${CYAN}install-launcher${NC}          Sideload Projectivy Launcher & disable stock ad-heavy launcher
-  ${CYAN}debloat [--dry-run]${NC}       Remove Sony bloat, Samba TV spyware, telemetry & Katniss voice
+  ${CYAN}install-launcher${NC}          Sideload Projectivy + SmartTube & disable stock ad engines
+  ${CYAN}debloat [--dry-run]${NC}       Disable Sony bloat, Samba TV spyware, telemetry & Katniss voice
   ${CYAN}tune${NC}                      Apply animation, D-pad latency, process cap & dex2oat AOT tweaks
+  ${CYAN}verify-reboot${NC}             Reboot the TV and verify sys.boot_completed=1 across cold boot
   ${CYAN}remote [port]${NC}             Launch the Local Web App & Mobile PWA Remote Control Center (default: 8765)
   ${CYAN}restore [dir|package]${NC}     Re-enable a specific package or roll back an entire backup
   ${CYAN}all${NC}                       Run full pipeline: discover -> backup -> audit -> launcher -> debloat -> tune
@@ -664,6 +753,7 @@ main() {
         install-launcher) cmd_install_launcher "$@" ;;
         debloat)          cmd_debloat "$@" ;;
         tune)             cmd_tune "$@" ;;
+        verify-reboot)    cmd_verify_reboot "$@" ;;
         remote)           cmd_remote "$@" ;;
         restore)          cmd_restore "$@" ;;
         all)              cmd_all "$@" ;;

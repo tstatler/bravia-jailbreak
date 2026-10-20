@@ -7,17 +7,17 @@ An ADB-over-LAN debloating, launcher replacement, and runtime optimization toolk
 Many Sony Bravia Android/Google TV models ship with only **2 GB of RAM**, a 32-bit ARM `cortex-a7` / `cortex-a55` execution profile, and 600 MB of ZRAM swap. Out of the box, memory and UI responsiveness are bottlenecked by five factors:
 
 1. **Bloated Stock Home Screen & Ad Daemons:** `com.google.android.tvlauncher` / `launcherx` and `com.google.android.tvrecommendations` (~42 MB RAM) continuously fetch video banners and recommendation rows.
-   - **Fix:** Sideloads the latest release of **[Projectivy Launcher](https://github.com/spocky/miproja1)** (`com.spocky.projengmenu`), registers it as the native OS home activity (`cmd package set-home-activity`), and disables the stock launcher and recommendation engines.
+   - **Fix:** Sideloads the latest release of **[Projectivy Launcher](https://github.com/spocky/miproja1)** (`com.spocky.projengmenu`) + **[SmartTube](https://github.com/yuliskov/SmartTube)** (`org.smarttube.stable`), enables Projectivy's Home override, disables `com.google.android.tvrecommendations`, and keeps `com.google.android.tvlauncher` installed (throttled in the background) as Android 11's system-signed Direct Boot `HOME` fallback so cold reboots never hang on `bootanimation`.
 2. **Always-Resident Background Daemons & Telemetry (`--user 0`):**
    - `com.google.android.tungsten.setupwraith` (**~74 MB RAM** — initial setup wizard daemon left running indefinitely)
    - `com.google.android.katniss` (**~58 MB RAM** — Google Assistant voice interactor daemon)
    - `com.android.settings.intelligence` (**~56 MB RAM** — background settings search indexer)
    - `tv.samba.ssm` (Samba Interactive TV Automatic Content Recognition screen-tracking spyware)
    - `com.sony.qrmt`, `com.sony.dtv.demo`, `android.autoinstalls.config.Sony.*`, `com.sony.dtv.smarthelp`, `com.sony.dtv.helpguidecontents` (Sony retail demos, telemetry, and help bloat)
-   - **Fix:** Disables and uninstalls ~35–40 bloatware packages for `--user 0` while explicitly protecting **Chromecast Built-in** (`com.google.android.apps.mediashell`), **Over-the-Air / Coax Live TV & Realtek/MediaTek tuner HALs**, **HDMI/CEC**, and **Streaming Apps** (preserving Widevine L1 DRM).
-3. **`InputDispatcher` & Accessibility D-Pad Latency:**
-   - When `accessibility_enabled=1` (or `com.google.android.marvin.talkback` is active), Android routes every D-pad key event synchronously through `AccessibilityManagerService` (`filterKeyEvent`) and forces Leanback grids to serialize accessibility node trees on every tile focus change.
-   - **Fix:** Since the stock launcher is disabled and Projectivy is set as the native system home activity, Accessibility interception is unnecessary—the script clears `enabled_accessibility_services`, sets `accessibility_enabled=0`, and disables `talkback`.
+   - **Fix (with Cold-Boot Safeguards):** Uses `pm disable-user --user 0` (never `pm uninstall -k --user 0`) on `/system` and `/vendor` packages, only uninstalls removable `/data/app` bloatware, and automatically inspects `dumpsys package` to refuse disabling any `UID 1000` (`android.uid.system`) or `FLAG_PERSISTENT` boot-critical service (such as `com.android.location.fused`, `com.android.se`, and `com.realtek.servicemenu`).
+3. **`InputDispatcher` & TalkBack D-Pad Latency:**
+   - When `com.google.android.marvin.talkback` (Android Accessibility Suite, ~113 MB RAM) is active, Android routes every D-pad key event through TalkBack's screen reader and forces Leanback grids to serialize accessibility node trees on every tile focus change.
+   - **Fix:** Disables `com.google.android.marvin.talkback` and `com.google.android.tts` while preserving only Projectivy Launcher's lightweight Home-button hook.
 4. **Slow Focus Animators & D-Pad Key-Repeat Delay:**
    - **Fix:** Lowers `long_press_timeout` from `400ms` to `250ms` for faster hold-to-scroll initiation, and sets `window_animation_scale`, `transition_animation_scale`, and `animator_duration_scale` to `0.0` (which also terminates `INFINITE` `ValueAnimator` focus "breathing" loops on frame 1 so focused tiles display a clean static highlight with zero idle GPU redraws).
 5. **On-the-Fly JIT Compilation & ZRAM Swap Thrashing:**
@@ -59,6 +59,7 @@ Many Sony Bravia Android/Google TV models ship with only **2 GB of RAM**, a 32-b
 ./bravia-opt.sh install-launcher          # Sideload Projectivy Launcher & disable stock launchers
 ./bravia-opt.sh debloat [--dry-run]       # Strip Sony bloat, Samba TV, SetupWraith, Katniss, etc.
 ./bravia-opt.sh tune                      # Apply D-pad latency, animation, process cap & AOT compilation
+./bravia-opt.sh verify-reboot             # Reboot the TV and verify sys.boot_completed=1 across cold boot
 ./bravia-opt.sh remote [port]             # Launch Web Remote & Control Center (Mac + Mobile PWA on port 8765)
 ./bravia-opt.sh restore [dir|package]     # Restore a single package or roll back an entire backup
 ```
