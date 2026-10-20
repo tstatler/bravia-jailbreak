@@ -526,9 +526,18 @@ cmd_tune() {
         fi
     done
 
-    log_info "Disabling Sony/Google usage diagnostics reporting flags..."
+    log_info "Disabling Sony/Google usage diagnostics, location triangulation, and ad tracking..."
     adb_tv shell settings put global multi_cb 0 || true
     adb_tv shell settings put secure user_setup_complete 1 || true
+    adb_tv shell settings put secure location_mode 0 || true
+    adb_tv shell settings put global wifi_scan_always_enabled 0 || true
+    adb_tv shell settings put global ble_scan_always_enabled 0 || true
+    adb_tv shell settings put secure limit_ad_tracking 1 || true
+    adb_tv shell cmd appops set com.google.android.gms GET_USAGE_STATS ignore >/dev/null 2>&1 || true
+    adb_tv shell cmd appops set com.google.android.gms COARSE_LOCATION ignore >/dev/null 2>&1 || true
+    adb_tv shell cmd appops set com.google.android.gms FINE_LOCATION ignore >/dev/null 2>&1 || true
+    adb_tv shell settings put global private_dns_mode hostname || true
+    adb_tv shell settings put global private_dns_specifier dns.adguard-dns.com || true
 
     log_info "Running Ahead-of-Time (AOT) native ARM compilation (dex2oat -m speed) on UI & streaming apps..."
     local aot_candidates=(
