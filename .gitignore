@@ -1,0 +1,6 @@
+# Local TV target configuration & user state
+.bravia.env
+.cache/
+backups/
+WALKTHROUGH.md
+.DS_Store
