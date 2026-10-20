@@ -45,7 +45,7 @@ TV_FALLBACK_IP="${TV_FALLBACK_IP:-}"
 ADB_PORT="${ADB_PORT:-5555}"
 ANIMATION_SCALE="${ANIMATION_SCALE:-0.0}"
 LONG_PRESS_TIMEOUT="${LONG_PRESS_TIMEOUT:-250}"
-MAX_CACHED_PROCESSES="${MAX_CACHED_PROCESSES:-4}"
+MAX_CACHED_PROCESSES="${MAX_CACHED_PROCESSES:-2}"
 
 # Check if a package matches any entry/glob in PROTECTED_PACKAGES
 is_protected() {
@@ -250,7 +250,7 @@ ${BOLD}Troubleshooting Checklist:${NC}
 }
 
 adb_tv() {
-    adb -s "${ADB_TARGET}" "$@"
+    adb -s "${ADB_TARGET}" "$@" < /dev/null
 }
 
 # 1. Discover & Connect
@@ -494,13 +494,43 @@ cmd_tune() {
     adb_tv shell settings put global activity_manager_constants "max_cached_processes=${MAX_CACHED_PROCESSES}" || true
     adb_tv shell device_config put activity_manager max_cached_processes "${MAX_CACHED_PROCESSES}" >/dev/null 2>&1 || true
 
+    log_info "Restricting background execution (appops RUN_IN_BACKGROUND) on Play Store & streaming apps..."
+    local enabled_pkgs
+    enabled_pkgs="$(adb_tv shell pm list packages -e | sed 's/^package://;s/\r$//')"
+    local bg_restrict_pkgs=(
+        "com.android.vending"
+        "com.netflix.ninja"
+        "com.hulu.livingroomplus"
+        "com.amazon.amazonvideo.livingroom"
+        "com.disney.disneyplus"
+        "com.apple.atve.sony.appletv"
+        "com.hbo.hbonow"
+        "com.peacocktv.peacockandroid"
+        "com.spotify.tv.android"
+        "com.google.android.youtube.tv"
+        "com.google.android.youtube.tvunplugged"
+        "com.tubitv"
+        "tv.pluto.android"
+        "com.kanopy.tvapp"
+        "com.collegehumor.chdropout"
+        "com.fubo.firetv.screen"
+        "com.roku.web.trc"
+        "com.turner.tnt.android.networkapp"
+        "com.yanka.mc.tv.prod.android"
+    )
+    local bp
+    for bp in "${bg_restrict_pkgs[@]}"; do
+        if echo "${enabled_pkgs}" | grep -qx "${bp}"; then
+            adb_tv shell cmd appops set "${bp}" RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+            adb_tv shell cmd appops set "${bp}" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+        fi
+    done
+
     log_info "Disabling Sony/Google usage diagnostics reporting flags..."
     adb_tv shell settings put global multi_cb 0 || true
     adb_tv shell settings put secure user_setup_complete 1 || true
 
     log_info "Running Ahead-of-Time (AOT) native ARM compilation (dex2oat -m speed) on UI & streaming apps..."
-    local enabled_pkgs
-    enabled_pkgs="$(adb_tv shell pm list packages -e | sed 's/^package://;s/\r$//')"
     local aot_candidates=(
         "com.spocky.projengmenu"
         "com.android.systemui"
