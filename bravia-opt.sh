@@ -394,6 +394,12 @@ for asset in data.get("assets", []):
         adb_tv install -r "${tvbro_apk}" || true
     fi
 
+    local nf_apk="${CACHE_DIR}/netflix-android-tv.apk"
+    if [[ -f "${nf_apk}" ]]; then
+        log_info "Updating factory Netflix to latest cached APK (fixes expired 2021 CA cert Error -121)..."
+        adb_tv install -r "${nf_apk}" || true
+    fi
+
     log_info "Configuring Projectivy Launcher as default Home & enabling its Accessibility Home-hook..."
     adb_tv shell cmd package set-home-activity "com.spocky.projengmenu/com.spocky.projengmenu.ui.home.MainActivity" || true
     adb_tv shell settings put secure enabled_accessibility_services "com.spocky.projengmenu/com.spocky.projengmenu.services.ProjectivyAccessibilityService" || true
