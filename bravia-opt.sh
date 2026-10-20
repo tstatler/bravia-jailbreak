@@ -558,6 +558,7 @@ cmd_tune() {
     local bg_restrict_pkgs=(
         "com.google.android.tvlauncher"
         "com.android.vending"
+        "com.phlox.tvwebbrowser"
         "com.netflix.ninja"
         "com.hulu.livingroomplus"
         "com.amazon.amazonvideo.livingroom"
@@ -595,13 +596,16 @@ cmd_tune() {
     adb_tv shell cmd appops set com.google.android.gms GET_USAGE_STATS ignore >/dev/null 2>&1 || true
     adb_tv shell cmd appops set com.google.android.gms COARSE_LOCATION ignore >/dev/null 2>&1 || true
     adb_tv shell cmd appops set com.google.android.gms FINE_LOCATION ignore >/dev/null 2>&1 || true
-    adb_tv shell settings put global private_dns_mode hostname || true
-    adb_tv shell settings put global private_dns_specifier dns.adguard-dns.com || true
+    # Keep Private DNS in default opportunistic mode (dns.adguard-dns.com sinkholes
+    # ichnaea.netflix.com to 127.0.0.1, which triggers Netflix startup Error -121)
+    adb_tv shell settings put global private_dns_mode opportunistic || true
+    adb_tv shell settings delete global private_dns_specifier >/dev/null 2>&1 || true
 
     log_info "Running Ahead-of-Time (AOT) native ARM compilation (dex2oat -m speed) on UI & streaming apps..."
     local aot_candidates=(
         "com.spocky.projengmenu"
         "org.smarttube.stable"
+        "com.phlox.tvwebbrowser"
         "com.android.systemui"
         "com.android.tv.settings"
         "com.android.tv"
