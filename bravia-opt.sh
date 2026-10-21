@@ -688,6 +688,57 @@ cmd_remote() {
     exec python3 "${SCRIPT_DIR}/remote/server.py" "${port}"
 }
 
+# 8b. On-Demand Chromecast Built-in Toggle (com.google.android.apps.mediashell)
+cmd_cast() {
+    ensure_adb
+    local action="${1:-status}"
+    local pkg="com.google.android.apps.mediashell"
+
+    case "${action}" in
+        on|enable|1)
+            log_step "Enabling Chromecast Built-in (${pkg}) for MacBook Streaming"
+            adb_tv shell cmd package install-existing --user 0 "${pkg}" >/dev/null 2>&1 || true
+            adb_tv shell pm enable --user 0 "${pkg}"
+            adb_tv shell cmd appops set "${pkg}" RUN_IN_BACKGROUND allow >/dev/null 2>&1 || true
+            adb_tv shell cmd appops set "${pkg}" RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1 || true
+            adb_tv shell am startservice -n "${pkg}/.MediaShellCastReceiverService" >/dev/null 2>&1 || true
+            log_ok "Chromecast Built-in is ON!"
+            echo -e "  • ${BOLD}Chrome / Brave / Edge:${NC} Menu (⋮) -> Cast, save, and share -> Cast... -> Select '${TV_NAME}'"
+            echo -e "    (Use 'Sources -> Cast screen' for full MacBook screen + audio, or 'Cast tab')"
+            echo -e "  • ${BOLD}VLC Local Video Files:${NC} Playback -> Renderer -> Select '${TV_NAME}'"
+            echo -e "  • Run ${CYAN}./bravia-opt.sh cast off${NC} when finished to free ~80 MB RAM."
+            ;;
+        off|disable|0)
+            log_step "Disabling Chromecast Built-in (${pkg}) to Reclaim ~80 MB RAM"
+            adb_tv shell am force-stop "${pkg}" >/dev/null 2>&1 || true
+            adb_tv shell cmd appops set "${pkg}" RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+            adb_tv shell cmd appops set "${pkg}" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+            adb_tv shell pm disable-user --user 0 "${pkg}"
+            log_ok "Chromecast Built-in is OFF (~80 MB background RAM saved)."
+            ;;
+        status)
+            log_step "Chromecast Built-in (${pkg}) Status"
+            local is_en rss_kb
+            is_en="$(adb_tv shell pm list packages -e "${pkg}" | tr -d '\r' | grep -x "package:${pkg}" || true)"
+            rss_kb="$(adb_tv shell "ps -A -o RSS,ARGS | grep '${pkg}' | grep -v grep | awk '{print \$1}' | head -n 1" | tr -d '\r' || true)"
+            if [[ -n "${is_en}" ]]; then
+                local rss_mb="0"
+                if [[ -n "${rss_kb}" && "${rss_kb}" =~ ^[0-9]+$ ]]; then
+                    rss_mb="$(( rss_kb / 1024 ))"
+                fi
+                log_ok "State: ${GREEN}${BOLD}ENABLED (Ready to Cast)${NC} | Process RAM: ~${rss_mb} MB"
+            else
+                log_info "State: ${YELLOW}${BOLD}DISABLED (Idle / Saving ~80 MB RAM)${NC}"
+                echo -e "  Run ${CYAN}./bravia-opt.sh cast on${NC} to enable casting from your MacBook."
+            fi
+            ;;
+        *)
+            log_error "Usage: ./bravia-opt.sh cast [on|off|status]"
+            return 1
+            ;;
+    esac
+}
+
 # 9. Verify Cold-Boot Safety Across an ADB Reboot
 cmd_verify_reboot() {
     ensure_adb
@@ -751,6 +802,7 @@ Commands:
   ${CYAN}debloat [--dry-run]${NC}       Disable Sony bloat, Samba TV spyware, telemetry & Katniss voice
   ${CYAN}tune${NC}                      Apply animation, D-pad latency, process cap & dex2oat AOT tweaks
   ${CYAN}verify-reboot${NC}             Reboot the TV and verify sys.boot_completed=1 across cold boot
+  ${CYAN}cast [on|off|status]${NC}      Toggle Chromecast Built-in on-demand for MacBook streaming (saves ~80MB RAM when off)
   ${CYAN}remote [port]${NC}             Launch the Local Web App & Mobile PWA Remote Control Center (default: 8765)
   ${CYAN}restore [dir|package]${NC}     Re-enable a specific package or roll back an entire backup
   ${CYAN}all${NC}                       Run full pipeline: discover -> backup -> audit -> launcher -> debloat -> tune
@@ -771,6 +823,7 @@ main() {
         debloat)          cmd_debloat "$@" ;;
         tune)             cmd_tune "$@" ;;
         verify-reboot)    cmd_verify_reboot "$@" ;;
+        cast)             cmd_cast "$@" ;;
         remote)           cmd_remote "$@" ;;
         restore)          cmd_restore "$@" ;;
         all)              cmd_all "$@" ;;

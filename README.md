@@ -60,9 +60,28 @@ Many Sony Bravia Android/Google TV models ship with only **2 GB of RAM**, a 32-b
 ./bravia-opt.sh debloat [--dry-run]       # Strip Sony bloat, Samba TV, SetupWraith, Katniss, etc.
 ./bravia-opt.sh tune                      # Apply D-pad latency, animation, process cap & AOT compilation
 ./bravia-opt.sh verify-reboot             # Reboot the TV and verify sys.boot_completed=1 across cold boot
+./bravia-opt.sh cast [on|off|status]      # Toggle Chromecast Built-in on-demand for MacBook streaming (saves ~80MB RAM when off)
 ./bravia-opt.sh remote [port]             # Launch Web Remote & Control Center (Mac + Mobile PWA on port 8765)
 ./bravia-opt.sh restore [dir|package]     # Restore a single package or roll back an entire backup
 ```
+
+---
+
+## Streaming from MacBook to TV (On-Demand Chromecast)
+
+To save ~80 MB of background RAM on 2 GB Bravia TVs, `com.google.android.apps.mediashell` (**Chromecast Built-in**) is disabled when idle. Whenever you want to stream from your MacBook:
+
+1. **Turn Chromecast ON** (via Web Remote button at `http://localhost:8765` or CLI):
+   ```bash
+   ./bravia-opt.sh cast on
+   ```
+2. **Stream from your MacBook:**
+   - **Browser Tab / Web Video / Full Mac Screen + Audio:** In **Chrome**, **Brave**, or **Edge**, click **Menu (⋮) $\rightarrow$ Cast, save, and share $\rightarrow$ Cast...**, choose your Bravia TV, and select **Cast tab** or **Sources $\rightarrow$ Cast screen**.
+   - **Local Video Files (`.mp4`, `.mkv`, `.mov`):** Open the file in **VLC** on macOS and select **Playback $\rightarrow$ Renderer $\rightarrow$ [Your Bravia TV]**.
+3. **Turn Chromecast OFF when finished** (reclaims ~80 MB RAM immediately):
+   ```bash
+   ./bravia-opt.sh cast off
+   ```
 
 ---
 

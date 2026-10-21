@@ -177,7 +177,9 @@ def parse_status():
         "shell",
         "grep -E 'MemTotal|MemFree|MemAvailable|Cached|SwapTotal|SwapFree' /proc/meminfo; "
         "echo '===PS==='; "
-        "ps -A -o PID,USER,RSS,ARGS | awk '$3 > 25000' | sort -k3 -rn | head -n 12; "
+        "ps -A -o PID,USER,RSS,ARGS | awk '$3 > 15000' | sort -k3 -rn | head -n 14; "
+        "echo '===CAST==='; "
+        "pm list packages -e com.google.android.apps.mediashell; "
         "echo '===MEDIA==='; "
         "dumpsys media_session"
     ], timeout=6)
@@ -193,9 +195,12 @@ def parse_status():
     parts = out.split("===PS===")
     mem_raw = parts[0] if len(parts) > 0 else ""
     rest = parts[1] if len(parts) > 1 else ""
-    ps_parts = rest.split("===MEDIA===")
-    ps_raw = ps_parts[0] if len(ps_parts) > 0 else ""
-    media_raw = ps_parts[1] if len(ps_parts) > 1 else ""
+    cast_parts = rest.split("===CAST===")
+    ps_raw = cast_parts[0] if len(cast_parts) > 0 else ""
+    rest2 = cast_parts[1] if len(cast_parts) > 1 else ""
+    media_parts = rest2.split("===MEDIA===")
+    cast_raw = media_parts[0] if len(media_parts) > 0 else ""
+    media_raw = media_parts[1] if len(media_parts) > 1 else ""
 
     # 1. Parse /proc/meminfo
     mem = {}
@@ -288,6 +293,11 @@ def parse_status():
             if state_code == 3:
                 break
 
+    cast_pkg = "com.google.android.apps.mediashell"
+    cast_enabled = f"package:{cast_pkg}" in cast_raw
+    cast_running = any(p["package"] == cast_pkg for p in processes)
+    cast_rss_mb = next((p["rss_mb"] for p in processes if p["package"] == cast_pkg), 0.0)
+
     return {
         "connected": True,
         "tv_name": ENV.get("TV_NAME", "BRAVIA VU1"),
@@ -300,6 +310,11 @@ def parse_status():
             "swap_total_mb": swap_total_mb,
             "swap_used_mb": swap_used_mb,
             "swap_pct": round((swap_used_mb / max(1, swap_total_mb)) * 100),
+        },
+        "cast": {
+            "enabled": cast_enabled,
+            "running": cast_running,
+            "rss_mb": cast_rss_mb,
         },
         "now_playing": now_playing,
         "processes": processes[:10],
@@ -404,6 +419,40 @@ class RemoteRequestHandler(BaseHTTPRequestHandler):
                 return
             ok, out, err = run_adb(["shell", "am", "force-stop", pkg])
             self._send_json({"ok": ok, "killed": pkg, "error": err})
+
+        elif parsed.path == "/api/cast/toggle":
+            cast_pkg = "com.google.android.apps.mediashell"
+            enable = body.get("enable")
+            if enable is None:
+                cur = parse_status().get("cast", {}).get("enabled", False)
+                enable = not cur
+            enable = bool(enable)
+
+            if enable:
+                ok, out, err = run_adb([
+                    "shell",
+                    f"cmd package install-existing --user 0 {cast_pkg} >/dev/null 2>&1 || true; "
+                    f"pm enable --user 0 {cast_pkg}; "
+                    f"cmd appops set {cast_pkg} RUN_IN_BACKGROUND allow >/dev/null 2>&1 || true; "
+                    f"cmd appops set {cast_pkg} RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1 || true; "
+                    f"am startservice -n {cast_pkg}/.MediaShellCastReceiverService >/dev/null 2>&1 || true"
+                ], timeout=8)
+            else:
+                ok, out, err = run_adb([
+                    "shell",
+                    f"am force-stop {cast_pkg} >/dev/null 2>&1 || true; "
+                    f"cmd appops set {cast_pkg} RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true; "
+                    f"cmd appops set {cast_pkg} RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true; "
+                    f"pm disable-user --user 0 {cast_pkg}"
+                ], timeout=8)
+
+            status_after = parse_status()
+            self._send_json({
+                "ok": ok,
+                "enabled": status_after.get("cast", {}).get("enabled", enable),
+                "status": status_after,
+                "error": err,
+            })
 
         elif parsed.path == "/api/ram/free":
             status_before = parse_status()

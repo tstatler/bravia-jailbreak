@@ -538,6 +538,23 @@
         </div>
       </div>
 
+      <!-- Stream from MacBook (On-Demand Chromecast) -->
+      <div class="card">
+        <h2>
+          <span>Stream from MacBook (Chromecast On-Demand)</span>
+          <span id="castBadge" style="font-size: 0.72rem; text-transform: none; color: var(--muted);">Checking...</span>
+        </h2>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="flex: 1; min-width: 220px; font-size: 0.82rem; color: var(--muted); line-height: 1.45;">
+            <div>• <strong style="color: var(--text);">Chrome / Brave / Edge:</strong> Menu (⋮) &rarr; Cast, save, and share &rarr; Cast... &rarr; Select TV (<em>Sources &rarr; Cast screen</em> or <em>Cast tab</em>)</div>
+            <div>• <strong style="color: var(--text);">VLC Local Video Files:</strong> Playback &rarr; Renderer &rarr; Select TV</div>
+          </div>
+          <button id="castToggleBtn" class="btn-accent" onclick="toggleCast()" style="min-width: 190px;">
+            📡 Enable Chromecast
+          </button>
+        </div>
+      </div>
+
       <!-- 1-Click App Launcher & Force-Killer -->
       <div class="card">
         <h2>
@@ -683,6 +700,23 @@
       setTimeout(refreshStatus, 600);
     }
 
+    let _castEnabled = false;
+
+    async function toggleCast() {
+      const nextState = !_castEnabled;
+      const btn = document.getElementById("castToggleBtn");
+      btn.disabled = true;
+      showToast(nextState ? "Enabling Chromecast receiver on TV..." : "Disabling Chromecast & freeing ~80 MB RAM...");
+      const res = await apiPost("/api/cast/toggle", { enable: nextState });
+      btn.disabled = false;
+      if (res.ok) {
+        showToast(res.enabled ? "Chromecast ON — ready to cast from Mac!" : "Chromecast OFF — ~80 MB RAM saved");
+        if (res.status) updateDashboard(res.status);
+      } else {
+        showToast("Failed to toggle Chromecast");
+      }
+    }
+
     async function sweepRam() {
       showToast("Sweeping background apps & caches...");
       const res = await apiPost("/api/ram/free", {});
@@ -720,13 +754,29 @@
         document.getElementById("swapFill").style.width = `${r.swap_pct}%`;
       }
 
+      if (data.cast) {
+        _castEnabled = !!data.cast.enabled;
+        const badge = document.getElementById("castBadge");
+        const btn = document.getElementById("castToggleBtn");
+        if (_castEnabled) {
+          const rssTxt = data.cast.rss_mb > 0 ? ` · ${data.cast.rss_mb} MB RAM` : "";
+          badge.innerHTML = `<span style="color: var(--success); font-weight: 700;">● ON (Ready to Cast${rssTxt})</span>`;
+          btn.textContent = "🛑 Disable Cast (Save ~80MB)";
+          btn.className = "btn-danger";
+        } else {
+          badge.innerHTML = `<span style="color: var(--muted);">○ OFF · Saving ~80 MB RAM</span>`;
+          btn.textContent = "📡 Enable Chromecast";
+          btn.className = "btn-accent";
+        }
+      }
+
       if (data.processes) {
         const list = document.getElementById("procList");
         list.innerHTML = data.processes.map(p => `
           <div class="proc-row">
             <div>
               <span class="proc-name">${p.label}</span>
-              <span class="proc-pkg">${p.package}</span>
+              <span class="proc-pkg">${p.process}</span>
             </div>
             <div class="proc-right">
               <span class="proc-rss">${p.rss_mb} MB</span>
